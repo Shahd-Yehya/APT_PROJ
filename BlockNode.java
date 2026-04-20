@@ -6,7 +6,7 @@ public class BlockNode {
 
     private final CharacterId blockId;
     private final CharacterId parentId;
-    private volatile boolean deleted;
+    private boolean deleted;
     private final CharacterCRDT content;
     private final List<BlockNode> children = new ArrayList<>();
 
