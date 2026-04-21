@@ -199,10 +199,16 @@ public class CharacterCRDT {
     public CharacterId getParentIdForCursor(int cursorPos) {
         rwLock.readLock().lock();
         try {
-            if (cursorPos <= 0) return ROOT_ID;
             List<CharacterNode> visible = new ArrayList<>();
             dfsCollectNodes(root, visible);
+            
+            // Clamp to valid range [0, visible.size()]
+            if (cursorPos < 0) cursorPos = 0;
             if (cursorPos > visible.size()) cursorPos = visible.size();
+            
+            // If at the start or block is empty, return ROOT_ID
+            if (cursorPos == 0) return ROOT_ID;
+            
             return visible.get(cursorPos - 1).getId();
         } finally {
             rwLock.readLock().unlock();
