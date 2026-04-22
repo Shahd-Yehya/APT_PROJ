@@ -1,3 +1,4 @@
+package src;
 import java.util.Objects;
 
 public final class CharacterId {
