@@ -165,7 +165,7 @@ public class EditorUI {
                 refreshTextPane(1);
 
                 // TODO (for kareem): send op over the network
-                // collaborationClient.sendOperation(op);
+                 collaborationClient.sendOperation(op);
 
                 // hnconsume el event 3shan Swing msh hyinsert el char lwa7do
                 e.consume();
@@ -285,7 +285,7 @@ public class EditorUI {
         }
 
         // TODO (for kareem): send op over the network
-        // collaborationClient.sendOperation(op);
+         collaborationClient.sendOperation(op);
     }
 
     // de el function elly btrefresh el text pane mn el CRDT state
@@ -338,7 +338,7 @@ public class EditorUI {
         statusLabel.setText("  Connected to session: " + sessionId);
 
         // TODO (for kareem): connect to the WebSocket server with this sessionId
-        // collaborationClient.connect(sessionId);
+         collaborationClient.connect(sessionId);
 
         JOptionPane.showMessageDialog(mainWindow,
             "Joined session: " + sessionId,
