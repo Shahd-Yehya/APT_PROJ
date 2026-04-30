@@ -1,0 +1,65 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // WebSocket library
+    implementation 'org.java-websocket:Java-WebSocket:1.5.3'
+    // JSON library
+    implementation 'org.json:json:20231013'
+    // Logging (required by Java-WebSocket)
+    implementation 'org.slf4j:slf4j-api:2.0.9'
+    implementation 'org.slf4j:slf4j-simple:2.0.9'
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src']
+        }
+    }
+}
+
+// Default main class for 'gradle run'
+// You can override this from the command line
+application {
+    mainClass = 'ui.EditorPanel'
+}
+
+run {
+    standardInput = System.in
+    // Allow passing siteId as an argument: gradle run --args="1"
+}
+
+// Tasks for specific entry points
+task runServer(type: JavaExec) {
+    group = 'application'
+    mainClass = 'controller.CollabServer'
+    classpath = sourceSets.main.runtimeClasspath
+    args = ['8080']
+}
+
+task runClient1(type: JavaExec) {
+    group = 'application'
+    mainClass = 'ui.EditorPanel'
+    classpath = sourceSets.main.runtimeClasspath
+    args = ['1']
+}
+
+task runClient2(type: JavaExec) {
+    group = 'application'
+    mainClass = 'ui.EditorPanel'
+    classpath = sourceSets.main.runtimeClasspath
+    args = ['2']
+}
+
+task runTests(type: JavaExec) {
+    group = 'verification'
+    mainClass = 'test.Phase2ManualTest'
+    classpath = sourceSets.main.runtimeClasspath
+}
