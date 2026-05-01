@@ -43,14 +43,16 @@ public class CRDTOperation {
     }
     
     
-    public static CRDTOperation insertChar(int siteId, CharacterId charId,
-                                           char value, CharacterId parentId,
-                                           CharacterId blockId) {
-        return new Builder(Type.INSERT_CHAR)
-                .siteId(siteId).charId(charId).value(value)
-                .parentId(parentId).blockId(blockId)
-                .build();
-    }
+   // Add bold and italic parameters to the method signature
+public static CRDTOperation insertChar(int siteId, CharacterId charId,
+                                       char value, CharacterId parentId,
+                                       CharacterId blockId, boolean bold, boolean italic) {
+    return new Builder(Type.INSERT_CHAR)
+            .siteId(siteId).charId(charId).value(value)
+            .parentId(parentId).blockId(blockId)
+            .bold(bold).italic(italic) 
+            .build();
+}
     
     public static CRDTOperation deleteChar(int siteId, CharacterId charId,
                                            CharacterId blockId) {

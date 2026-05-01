@@ -70,10 +70,10 @@ public class CharacterCRDT {
         parent.addChild(newNode);
         nodeIndex.put(newId, newNode);
 
-        
-        CRDTOperation op = CRDTOperation.insertChar(siteId, newId, value,parentId, blockId);
-        pushUndo(op);
-        return op;
+               // Pass the formatting arguments to the updated factory method
+    CRDTOperation op = CRDTOperation.insertChar(siteId, newId, value, parentId, blockId, bold, italic);
+    pushUndo(op);
+    return op;
     }
 
     

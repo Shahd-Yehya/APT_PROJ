@@ -41,7 +41,7 @@ task runServer(type: JavaExec) {
     group = 'application'
     mainClass = 'controller.CollabServer'
     classpath = sourceSets.main.runtimeClasspath
-    args = ['8080']
+    args = ['8085']
 }
 
 task runClient1(type: JavaExec) {

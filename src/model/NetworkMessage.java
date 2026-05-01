@@ -214,8 +214,9 @@ public class NetworkMessage {
         CharacterId blockId  = new CharacterId(blockSite, blockClock);
         CharacterId bParent  = new CharacterId(blockParentSite, blockParentClock);
         switch (type) {
-            case INSERT_CHAR:
-                return CRDTOperation.insertChar(siteId, charId, charValue, parentId, blockId);
+           case INSERT_CHAR:
+            // Pass the bold and italic network payload values into the CRDT
+            return CRDTOperation.insertChar(siteId, charId, charValue, parentId, blockId, bold, italic);
             case DELETE_CHAR:
                 return CRDTOperation.deleteChar(siteId, charId, blockId);
             case FORMAT_CHAR:

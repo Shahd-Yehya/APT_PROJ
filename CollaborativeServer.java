@@ -117,7 +117,7 @@ public class CollaborativeServer {
      * Main method to start the server.
      */
     public static void main(String[] args) {
-        int port = args.length > 0 ? Integer.parseInt(args[0]) : 8080;
+        int port = args.length > 0 ? Integer.parseInt(args[0]) : 8085;
         CollaborativeServer server = new CollaborativeServer(port);
         server.start();
     }

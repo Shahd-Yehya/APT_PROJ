@@ -129,29 +129,32 @@ public class CursorTracker {
 
     // ─── private helpers ─────────────────────────────────────────────────
 
-    private void repaintCursor(int siteId, RemoteCursor rc) {
-        // Remove old highlight
-        if (rc.highlightTag != null) {
-            textPane.getHighlighter().removeHighlight(rc.highlightTag);
-            rc.highlightTag = null;
-        }
-
-        // Convert visible-char index to Swing document offset
-        int swingOffset = visibleIndexToSwingOffset(rc.visibleCharIndex);
-        if (swingOffset < 0) return;
-
-        Color color = colorFor(siteId);
-        Highlighter.HighlightPainter painter = new CursorPainter(color);
-
-        try {
-            // Highlight a zero-width range – the painter draws the caret bar
-            rc.highlightTag = textPane.getHighlighter()
-                    .addHighlight(swingOffset, swingOffset, painter);
-        } catch (BadLocationException e) {
-            System.err.println("[CursorTracker] Bad offset " + swingOffset
-                    + " for site " + siteId);
-        }
+   private void repaintCursor(int siteId, RemoteCursor rc) {
+    if (rc.highlightTag != null) {
+        textPane.getHighlighter().removeHighlight(rc.highlightTag);
+        rc.highlightTag = null;
     }
+
+    int swingOffset = visibleIndexToSwingOffset(rc.visibleCharIndex);
+    if (swingOffset < 0) return;
+
+    Color color = colorFor(siteId);
+    Highlighter.HighlightPainter painter = new CursorPainter(color);
+
+    try {
+        int len = textPane.getDocument().getLength();
+        int endOffset = Math.min(swingOffset + 1, Math.max(swingOffset, len));
+        
+        // Ensure the range is at least 1 char wide to trigger the paint cycle
+        if (swingOffset == len && len > 0) {
+            rc.highlightTag = textPane.getHighlighter().addHighlight(swingOffset - 1, swingOffset, painter);
+        } else {
+            rc.highlightTag = textPane.getHighlighter().addHighlight(swingOffset, endOffset, painter);
+        }
+    } catch (BadLocationException e) {
+        System.err.println("[CursorTracker] Bad offset " + swingOffset + " for site " + siteId);
+    }
+}
 
     /**
      * Convert a visible-character index (0-based in the CRDT document) to a
@@ -176,21 +179,21 @@ public class CursorTracker {
      */
     private static class CursorPainter implements Highlighter.HighlightPainter {
         private final Color color;
-
-        CursorPainter(Color color) { this.color = color; }
-
+        
+        public CursorPainter(Color color) {
+            this.color = color;
+        }
+        
         @Override
-        public void paint(Graphics g, int p0, int p1,
-                          Shape bounds, JTextComponent c) {
+        public void paint(Graphics g, int p0, int p1, Shape bounds, JTextComponent c) {
             try {
                 Rectangle r = c.modelToView(p0);
                 if (r == null) return;
                 g.setColor(color);
-                // Draw a 2-pixel wide vertical bar the height of the line
-                g.fillRect(r.x, r.y, 2, r.height);
-            } catch (BadLocationException e) {
-                // ignore – text changed between paint call
-            }
+                // Check if we are drawing at the very end of the document
+                int xPos = (p0 == c.getDocument().getLength() && p0 > 0) ? r.x + r.width : r.x;
+                g.fillRect(xPos, r.y, 2, r.height);
+            } catch (BadLocationException e) {}
         }
     }
 }

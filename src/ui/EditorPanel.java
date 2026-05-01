@@ -26,7 +26,7 @@ import java.util.List;
  * - SwingUtilities.invokeLater() for all remote updates
  *
  * Person 2 tasks implemented here
- * --------------------------------
+ * ----package----------------------------
  * - Local cursor movement → CURSOR message via CollabClient.sendCursor()
  * - Incoming CURSOR messages → CursorTracker.updateCursor()
  * - Remote operations received → apply to CRDT → refresh UI
@@ -130,7 +130,7 @@ public class EditorPanel extends JFrame {
      * We intercept text changes via the Swing DocumentListener instead of
      * KeyListener, because KeyListener doesn't handle IME, paste, etc.
      */
-    private void wireDocumentListener(CharacterId activeBlock) {
+   private void wireDocumentListener(CharacterId activeBlock) {
         // Store which block is currently active. For Phase 2, a single block
         // is fine – Phase 3 will add block splitting logic.
         final CharacterId[] currentBlock = {activeBlock};
@@ -143,8 +143,7 @@ public class EditorPanel extends JFrame {
                 try {
                     int    offset = e.getOffset();
                     int    len    = e.getLength();
-                    String text   = e.getDocument()
-                            .getText(offset, len);
+                    String text   = e.getDocument().getText(offset, len);
 
                     for (int i = 0; i < text.length(); i++) {
                         char ch = text.charAt(i);
@@ -163,7 +162,10 @@ public class EditorPanel extends JFrame {
                         if (client != null && op != null)
                             client.sendOperation(op);
                     }
-                    // No need to refresh text here – Swing already shows it
+                    
+                    // 1. CALL THE FUNCTION HERE AFTER INSERTIONS
+                    enforceBlockLimits();
+
                 } catch (BadLocationException ex) {
                     ex.printStackTrace();
                 }
@@ -192,11 +194,67 @@ public class EditorPanel extends JFrame {
                             client.sendOperation(op);
                     }
                 }
+                
+                // 2. CALL THE FUNCTION HERE AFTER DELETIONS
+                enforceBlockLimits();
             }
 
             @Override
             public void changedUpdate(DocumentEvent e) { /* styling – ignore */ }
         });
+    }
+
+    // =====================================================================
+    // 3. PLACE THE METHOD DEFINITIONS HERE (OUTSIDE wireDocumentListener)
+    // =====================================================================
+
+    private void enforceBlockLimits() {
+        List<BlockNode> blocks = crdtDoc.getVisibleBlocks();
+        for (int i = 0; i < blocks.size(); i++) {
+            BlockNode block = blocks.get(i);
+            int lineCount = countLines(block);
+            
+            if (lineCount > 10) {
+                // Document violates Max Bounds: Split the block roughly in half
+                int splitPos = findLineBreakPosition(block, 5);
+                SplitBlockOperation splitter = new SplitBlockOperation(crdtDoc.getBlockCRDT(), siteId, ++localClock);
+                splitter.splitBlock(block.getBlockId(), splitPos);
+                
+                refreshTextPane();
+                break; // Break and let the next UI cycle handle cascading
+                
+            } else if (lineCount < 2 && blocks.size() > 1) {
+                // Document violates Min Bounds: Merge with the adjacent block
+                if (i < blocks.size() - 1) {
+                    MergeBlockOperation merger = new MergeBlockOperation(crdtDoc.getBlockCRDT(), siteId, ++localClock);
+                    merger.mergeBlocks(block.getBlockId(), blocks.get(i + 1).getBlockId());
+                    
+                    refreshTextPane();
+                    break;
+                }
+            }
+        }
+    }
+
+    private int countLines(BlockNode block) {
+        int lines = 1;
+        for (CharacterNode node : block.getContent().getVisibleNodes()) {
+            if (node.getValue() == '\n') lines++;
+        }
+        return lines;
+    }
+
+    private int findLineBreakPosition(BlockNode block, int targetLine) {
+        int currentLine = 1;
+        int pos = 0;
+        for (CharacterNode node : block.getContent().getVisibleNodes()) {
+            pos++;
+            if (node.getValue() == '\n') {
+                currentLine++;
+                if (currentLine == targetLine) return pos;
+            }
+        }
+        return pos / 2; 
     }
 
     // ─── caret movement → CURSOR message (Person 2) ──────────────────────
@@ -292,6 +350,12 @@ public class EditorPanel extends JFrame {
     // ─── apply a remote CRDTOperation ────────────────────────────────────
 
     private void applyRemoteOperation(CRDTOperation op, NetworkMessage msg) {
+        if (op.getCharId() != null) {
+        localClock = Math.max(localClock, op.getCharId().getClock());
+    }
+    if (op.getBlockId() != null) {
+        localClock = Math.max(localClock, op.getBlockId().getClock());
+    }
         CharacterId blockId = op.getBlockId();
 
         switch (op.getType()) {
@@ -456,7 +520,7 @@ public class EditorPanel extends JFrame {
     // ─── Join Session dialog (Person 1) ──────────────────────────────────
 
     private void showJoinDialog() {
-        JTextField serverField = new JTextField("ws://localhost:8080", 20);
+        JTextField serverField = new JTextField("ws://localhost:8085", 20);
         JTextField docField    = new JTextField(documentId, 20);
 
         JPanel panel = new JPanel(new GridLayout(0, 1, 4, 4));
@@ -475,22 +539,50 @@ public class EditorPanel extends JFrame {
         String serverUrl = serverField.getText().trim();
 
         try {
+            System.out.println("[EditorPanel] Joining session: server=" + serverUrl + " documentId=" + documentId + " siteId=" + siteId);
+            
             client = new CollabClient(serverUrl, siteId, documentId,
                     this::handleNetworkMessage);
+            
+            // Set up error callback to show errors in UI
+            client.setOnError(errorMsg -> {
+                System.err.println("[EditorPanel] Connection error: " + errorMsg);
+                SwingUtilities.invokeLater(() ->
+                    JOptionPane.showMessageDialog(EditorPanel.this,
+                            "Connection failed: " + errorMsg,
+                            "Error", JOptionPane.ERROR_MESSAGE)
+                );
+            });
+            
+            System.out.println("[EditorPanel] Calling connect()...");
             client.connect();
             
-            // After joining, broadcast our initial block so others know about it
-            // (In a real app, we'd wait for connection, but for Phase 2 we'll send it now)
+            System.out.println("[EditorPanel] Waiting for connection to establish (5 seconds timeout)...");
+            boolean connected = client.waitForConnection(5000);
+            
+            if (!connected) {
+                JOptionPane.showMessageDialog(this,
+                        "Connection timeout – server at " + serverUrl + " did not respond within 5 seconds.",
+                        "Connection Failed", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            
+            System.out.println("[EditorPanel] Connection established! Sending initial blocks...");
+            
+            // After connection is established, broadcast our initial block so others know about it
             List<BlockNode> blocks = crdtDoc.getVisibleBlocks();
+            System.out.println("[EditorPanel] Sending " + blocks.size() + " initial block(s)");
             for (BlockNode bn : blocks) {
                 CRDTOperation op = CRDTOperation.insertBlock(siteId, bn.getBlockId(), null);
                 client.sendOperation(op);
             }
 
             JOptionPane.showMessageDialog(this,
-                    "Connecting to " + serverUrl + " …",
+                    "Connected to " + serverUrl + " as site " + siteId + " in document '" + documentId + "'",
                     "Join Session", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
+            System.err.println("[EditorPanel] Exception during join: " + e.getMessage());
+            e.printStackTrace();
             JOptionPane.showMessageDialog(this,
                     "Failed to connect: " + e.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
