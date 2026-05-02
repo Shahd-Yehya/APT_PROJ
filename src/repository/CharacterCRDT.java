@@ -78,11 +78,19 @@ public class CharacterCRDT {
 
     
     public void applyRemoteInsert(CRDTOperation op, boolean bold, boolean italic) {
-        CharacterId newId    = op.getCharId();
+        CharacterId newId = op.getCharId();
+        CharacterNode existing = nodeIndex.get(newId);
+
+        if (existing != null) {
+            // Redo case: node exists but was previously marked deleted (tombstone).
+            // We revive it and update its formatting.
+            existing.setDeleted(false);
+            existing.setBold(bold);
+            existing.setItalic(italic);
+            return;
+        }
+
         CharacterId parentId = op.getParentId();
-
-        if (nodeIndex.containsKey(newId)) return; 
-
         CharacterNode newNode = new CharacterNode(newId, op.getValue(), parentId);
         newNode.setBold(bold);
         newNode.setItalic(italic);

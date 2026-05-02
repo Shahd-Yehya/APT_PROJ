@@ -127,34 +127,47 @@ public class CursorTracker {
         }
     }
 
+    /** 
+     * Clears all highlights from the text pane. 
+     * Essential before doc.remove() to avoid orphaned 'ghost' highlights.
+     */
+    public void clearAllHighlights() {
+        for (RemoteCursor rc : cursors.values()) {
+            if (rc.highlightTag != null) {
+                try {
+                    textPane.getHighlighter().removeHighlight(rc.highlightTag);
+                } catch (Exception ignored) {}
+                rc.highlightTag = null;
+            }
+        }
+    }
+
     // ─── private helpers ─────────────────────────────────────────────────
 
-   private void repaintCursor(int siteId, RemoteCursor rc) {
-    if (rc.highlightTag != null) {
-        textPane.getHighlighter().removeHighlight(rc.highlightTag);
-        rc.highlightTag = null;
-    }
-
-    int swingOffset = visibleIndexToSwingOffset(rc.visibleCharIndex);
-    if (swingOffset < 0) return;
-
-    Color color = colorFor(siteId);
-    Highlighter.HighlightPainter painter = new CursorPainter(color);
-
-    try {
-        int len = textPane.getDocument().getLength();
-        int endOffset = Math.min(swingOffset + 1, Math.max(swingOffset, len));
-        
-        // Ensure the range is at least 1 char wide to trigger the paint cycle
-        if (swingOffset == len && len > 0) {
-            rc.highlightTag = textPane.getHighlighter().addHighlight(swingOffset - 1, swingOffset, painter);
-        } else {
-            rc.highlightTag = textPane.getHighlighter().addHighlight(swingOffset, endOffset, painter);
+    private void repaintCursor(int siteId, RemoteCursor rc) {
+        if (rc.highlightTag != null) {
+            textPane.getHighlighter().removeHighlight(rc.highlightTag);
+            rc.highlightTag = null;
         }
-    } catch (BadLocationException e) {
-        System.err.println("[CursorTracker] Bad offset " + swingOffset + " for site " + siteId);
+
+        int swingOffset = visibleIndexToSwingOffset(rc.visibleCharIndex);
+        if (swingOffset < 0) return;
+
+        Color color = colorFor(siteId);
+        // Pass the exact swingOffset to the painter to bypass range calculations
+        Highlighter.HighlightPainter painter = new CursorPainter(color, swingOffset);
+
+        try {
+            int len = textPane.getDocument().getLength();
+            // Create a small range just to satisfy the Highlighter API and ensure a paint cycle is triggered.
+            // The painter will ignore these bounds and use the exactOffset instead.
+            int start = Math.max(0, swingOffset - 1);
+            int end   = Math.min(len, swingOffset + 1);
+            rc.highlightTag = textPane.getHighlighter().addHighlight(start, end, painter);
+        } catch (BadLocationException e) {
+            System.err.println("[CursorTracker] Bad offset " + swingOffset + " for site " + siteId);
+        }
     }
-}
 
     /**
      * Convert a visible-character index (0-based in the CRDT document) to a
@@ -179,21 +192,26 @@ public class CursorTracker {
      */
     private static class CursorPainter implements Highlighter.HighlightPainter {
         private final Color color;
+        private final int exactOffset;
         
-        public CursorPainter(Color color) {
+        public CursorPainter(Color color, int exactOffset) {
             this.color = color;
+            this.exactOffset = exactOffset;
         }
         
         @Override
         public void paint(Graphics g, int p0, int p1, Shape bounds, JTextComponent c) {
             try {
-                Rectangle r = c.modelToView(p0);
+                // Ignore p0/p1 and use the strictly-provided absolute coordinate.
+                // This prevents the cursor from jumping when the range spans newlines or ends of doc.
+                Rectangle r = c.modelToView(exactOffset);
                 if (r == null) return;
+                
                 g.setColor(color);
-                // Check if we are drawing at the very end of the document
-                int xPos = (p0 == c.getDocument().getLength() && p0 > 0) ? r.x + r.width : r.x;
-                g.fillRect(xPos, r.y, 2, r.height);
-            } catch (BadLocationException e) {}
+                g.fillRect(r.x, r.y, 2, r.height);
+            } catch (BadLocationException e) {
+                // Silently ignore if the view isn't ready
+            }
         }
     }
 }

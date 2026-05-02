@@ -261,7 +261,8 @@ public class EditorPanel extends JFrame {
 
     private void wireCaretListener() {
         textPane.addCaretListener(e -> {
-            if (client == null || !client.isConnected()) return;
+            // BUG FIX 1: Ignore caret updates while we are programmatically refreshing the text
+            if (updatingText || client == null || !client.isConnected()) return;
 
             int dot = e.getDot();  // caret position in Swing document
 
@@ -414,6 +415,11 @@ public class EditorPanel extends JFrame {
             // Store current selection/caret to restore later
             int caretPos = textPane.getCaretPosition();
             
+            // BUG FIX 2: Clear highlights BEFORE clearing document to prevent orphaned 'ghost' tags
+            if (cursorTracker != null) {
+                cursorTracker.clearAllHighlights();
+            }
+
             // Clear document
             doc.remove(0, doc.getLength());
 
@@ -593,10 +599,12 @@ public class EditorPanel extends JFrame {
 
     /** Creates the very first block so new users have somewhere to type. */
     private CharacterId seedFirstBlock() {
-        CRDTOperation op = crdtDoc.insertBlock(siteId, ++localClock, null);
-        if (op != null) return op.getBlockId();
-        // If the op was null (duplicate), return root
-        return BlockCRDT.ROOT_BLOCK_ID;
+        // Use a shared root block ID (site 0, clock 0) so all clients sync to the same first line
+        CharacterId rootBlockId = new CharacterId(0, 0);
+        crdtDoc.getBlockCRDT().applyRemoteInsertBlock(
+            CRDTOperation.insertBlock(0, rootBlockId, null)
+        );
+        return rootBlockId;
     }
 
     // ─── entry point ─────────────────────────────────────────────────────
